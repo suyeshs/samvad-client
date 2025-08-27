@@ -1,0 +1,258 @@
+-- Language configurations table
+CREATE TABLE IF NOT EXISTS languages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    code TEXT UNIQUE NOT NULL,
+    name TEXT NOT NULL,
+    greeting TEXT NOT NULL,
+    greeting_audio_url TEXT,
+    flag TEXT,
+    agent_name TEXT NOT NULL,
+    agent_description TEXT,
+    is_active BOOLEAN DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- User language preferences table
+CREATE TABLE IF NOT EXISTS user_language_preferences (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id TEXT NOT NULL,
+    language_code TEXT NOT NULL,
+    cf_country TEXT,
+    cf_city TEXT,
+    cf_timezone TEXT,
+    cf_ip TEXT,
+    cf_locale TEXT,
+    browser_locale TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (language_code) REFERENCES languages(code)
+);
+
+-- Language detection rules table
+CREATE TABLE IF NOT EXISTS language_detection_rules (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    country_code TEXT NOT NULL,
+    default_language_code TEXT NOT NULL,
+    priority INTEGER DEFAULT 0,
+    is_active BOOLEAN DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (default_language_code) REFERENCES languages(code)
+);
+
+-- Insert all languages supported by Sarvam.ai
+INSERT OR IGNORE INTO languages (code, name, greeting, flag, agent_name, agent_description) VALUES
+-- English
+('en', 'English', 'How may I help you today?', '🇺🇸', 'Alex', 'Your English-speaking AI assistant'),
+
+-- Indian Languages
+('hi', 'Hindi', 'मैं आपकी कैसे मदद कर सकता हूं', '🇮🇳', 'प्रिया', 'आपकी हिंदी AI सहायक'),
+('ta', 'Tamil', 'நான் உங்களுக்கு எப்படி உதவ முடியும்', '🇮🇳', 'தேவி', 'உங்கள் தமிழ் AI உதவியாளர்'),
+('bn', 'Bengali', 'আমি আপনাকে কীভাবে সাহায্য করতে পারি', '🇮🇳', 'রিয়া', 'আপনার বাংলা AI সহকারী'),
+('te', 'Telugu', 'నేను మీకు ఎలా సహాయం చేయగలను', '🇮🇳', 'లక్ష్మి', 'మీ తెలుగు AI సహాయకుడు'),
+('mr', 'Marathi', 'मी तुमची कशी मदत करू शकतो', '🇮🇳', 'माया', 'तुमची मराठी AI सहाय्यक'),
+('kn', 'Kannada', 'ನಾನು ನಿಮಗೆ ಹೇಗೆ ಸಹಾಯ ಮಾಡಬಹುದು', '🇮🇳', 'ಕಾವ್ಯ', 'ನಿಮ್ಮ ಕನ್ನಡ AI ಸಹಾಯಕ'),
+('gu', 'Gujarati', 'હું તમને કેવી રીતે મદદ કરી શકું', '🇮🇳', 'દિયા', 'તમારી ગુજરાતી AI સહાયક'),
+('ml', 'Malayalam', 'ഞാൻ നിങ്ങളെ എങ്ങനെ സഹായിക്കാം', '🇮🇳', 'മാല', 'നിങ്ങളുടെ മലയാളം AI സഹായി'),
+('pa', 'Punjabi', 'ਮੈਂ ਤੁਹਾਡੀ ਕਿਵੇਂ ਮਦਦ ਕਰ ਸਕਦਾ ਹਾਂ', '🇮🇳', 'ਸੀਮਾ', 'ਤੁਹਾਡੀ ਪੰਜਾਬੀ AI ਸਹਾਇਕ'),
+('or', 'Odia', 'ମୁଁ ଆପଣଙ୍କୁ କିପରି ସହାୟତା କରିପାରେ', '🇮🇳', 'ପ୍ରିୟା', 'ଆପଣଙ୍କ ଓଡ଼ିଆ AI ସହାୟକ'),
+('as', 'Assamese', 'মই আপোনাক কেনেকৈ সহায় কৰিব পাৰোঁ', '🇮🇳', 'ପ୍ରିୟা', 'ଆପଣাৰ ଅସମିୟା AI ସହାୟକ'),
+('ur', 'Urdu', 'میں آپ کی کیسے مدد کر سکتا ہوں', '🇮🇳', 'فاطمہ', 'آپ کی اردو AI معاون'),
+
+-- South Asian Languages
+('ne', 'Nepali', 'म तपाईंलाई कसरी मद्दत गर्न सक्छु', '🇳🇵', 'सुनीता', 'तपाईंको नेपाली AI सहायक'),
+('si', 'Sinhala', 'මට ඔබට කෙසේ උදව් කළ හැකිද', '🇱🇰', 'කුමුදිනි', 'ඔබගේ සිංහල AI සහායක'),
+
+-- Southeast Asian Languages
+('my', 'Myanmar', 'ကျွန်တော် သင့်ကို ဘယ်လို ကူညီနိုင်မလဲ', '🇲🇲', 'သီရိ', 'သင့်ရဲ့ မြန်မာ AI အကူအညီ'),
+('th', 'Thai', 'ฉันจะช่วยคุณได้อย่างไร', '🇹🇭', 'นารี', 'ผู้ช่วย AI ภาษาไทยของคุณ'),
+('vi', 'Vietnamese', 'Tôi có thể giúp bạn như thế nào', '🇻🇳', 'Mai', 'Trợ lý AI tiếng Việt của bạn'),
+('id', 'Indonesian', 'Bagaimana saya bisa membantu Anda', '🇮🇩', 'Sari', 'Asisten AI Bahasa Indonesia Anda'),
+('ms', 'Malay', 'Bagaimana saya boleh membantu anda', '🇲🇾', 'Aminah', 'Pembantu AI Bahasa Melayu anda'),
+('tl', 'Filipino', 'Paano ko kayo matutulungan', '🇵🇭', 'Maria', 'Ang iyong Filipino AI assistant'),
+('km', 'Khmer', 'ខ្ញុំអាចជួយអ្នកបានយ៉ាងណា', '🇰🇭', 'សុភា', 'អ្នកជំនួយ AI ខ្មែររបស់អ្នក'),
+('lo', 'Lao', 'ຂ້ອຍສາມາດຊ່ວຍທ່ານໄດ້ແນວໃດ', '🇱🇦', 'ສົມສະໄໝ', 'ຜູ້ຊ່ວຍ AI ລາວຂອງທ່ານ'),
+
+-- East Asian Languages
+('zh', 'Chinese', '我如何能帮助您', '🇨🇳', '小华', '您的中文AI助手'),
+('ja', 'Japanese', 'どのようにお手伝いできますか', '🇯🇵', 'さくら', 'あなたの日本語AIアシスタント'),
+('ko', 'Korean', '어떻게 도와드릴까요', '🇰🇷', '민지', '당신의 한국어 AI 어시스턴트'),
+
+-- Middle Eastern Languages
+('ar', 'Arabic', 'كيف يمكنني مساعدتك', '🇸🇦', 'فاطمة', 'مساعدك الذكي باللغة العربية'),
+('fa', 'Persian', 'چگونه می‌توانم به شما کمک کنم', '🇮🇷', 'پریا', 'دستیار هوشمند فارسی شما'),
+('he', 'Hebrew', 'איך אני יכול לעזור לך', '🇮🇱', 'שירה', 'העוזר האינטליגנטי שלך בעברית'),
+
+-- European Languages
+('tr', 'Turkish', 'Size nasıl yardımcı olabilirim', '🇹🇷', 'Ayşe', 'Türkçe AI asistanınız'),
+('ru', 'Russian', 'Как я могу вам помочь', '🇷🇺', 'Анна', 'Ваш русский AI помощник'),
+('de', 'German', 'Wie kann ich Ihnen helfen', '🇩🇪', 'Anna', 'Ihr deutscher AI-Assistent'),
+('fr', 'French', 'Comment puis-je vous aider', '🇫🇷', 'Sophie', 'Votre assistant IA français'),
+('es', 'Spanish', '¿Cómo puedo ayudarte', '🇪🇸', 'Sofia', 'Tu asistente de IA en español'),
+('pt', 'Portuguese', 'Como posso ajudá-lo', '🇵🇹', 'Maria', 'Seu assistente de IA em português'),
+('it', 'Italian', 'Come posso aiutarti', '🇮🇹', 'Sofia', 'Il tuo assistente AI italiano'),
+('nl', 'Dutch', 'Hoe kan ik u helpen', '🇳🇱', 'Emma', 'Uw Nederlandse AI-assistent'),
+('sv', 'Swedish', 'Hur kan jag hjälpa dig', '🇸🇪', 'Eva', 'Din svenska AI-assistent'),
+('da', 'Danish', 'Hvordan kan jeg hjælpe dig', '🇩🇰', 'Mette', 'Din danske AI-assistent'),
+('no', 'Norwegian', 'Hvordan kan jeg hjelpe deg', '🇳🇴', 'Ingrid', 'Din norske AI-assistent'),
+('fi', 'Finnish', 'Miten voin auttaa sinua', '🇫🇮', 'Aino', 'Sinun suomenkielinen AI-avustaja'),
+('pl', 'Polish', 'Jak mogę Ci pomóc', '🇵🇱', 'Anna', 'Twój polski asystent AI'),
+('cs', 'Czech', 'Jak vám mohu pomoci', '🇨🇿', 'Tereza', 'Váš český AI asistent'),
+('sk', 'Slovak', 'Ako vám môžem pomôcť', '🇸🇰', 'Mária', 'Váš slovenský AI asistent'),
+('hu', 'Hungarian', 'Hogyan segíthetek', '🇭🇺', 'Zsuzsa', 'Az Ön magyar AI asszisztense'),
+('ro', 'Romanian', 'Cum vă pot ajuta', '🇷🇴', 'Maria', 'Asistentul dvs. AI în română'),
+('bg', 'Bulgarian', 'Как мога да ви помогна', '🇧🇬', 'Мария', 'Вашият български AI асистент'),
+('hr', 'Croatian', 'Kako vam mogu pomoći', '🇭🇷', 'Marija', 'Vaš hrvatski AI asistent'),
+('sr', 'Serbian', 'Како могу да вам помогнем', '🇷🇸', 'Марија', 'Ваш српски AI асистент'),
+('sl', 'Slovenian', 'Kako vam lahko pomagam', '🇸🇮', 'Maja', 'Vaš slovenski AI asistent'),
+('et', 'Estonian', 'Kuidas saan teid aidata', '🇪🇪', 'Mari', 'Teie eestikeelne AI abiline'),
+('lv', 'Latvian', 'Kā es varu jums palīdzēt', '🇱🇻', 'Marta', 'Jūsu latviešu AI asistents'),
+('lt', 'Lithuanian', 'Kaip galiu jums padėti', '🇱🇹', 'Marija', 'Jūsų lietuvių AI asistentas'),
+('mt', 'Maltese', 'Kif nista\' ngħinek', '🇲🇹', 'Marija', 'L-assistent AI tiegħek bil-Malti'),
+('ga', 'Irish', 'Conas is féidir liom cabhrú leat', '🇮🇪', 'Siobhán', 'Do chúntóir AI Gaeilge'),
+('cy', 'Welsh', 'Sut alla i eich helpu', '🇬🇧', 'Gwen', 'Eich cynorthwyydd AI Cymraeg'),
+('is', 'Icelandic', 'Hvernig get ég hjálpað þér', '🇮🇸', 'Helga', 'Þinn íslenski AI aðstoðarmaður'),
+('el', 'Greek', 'Πώς μπορώ να σας βοηθήσω', '🇬🇷', 'Μαρία', 'Ο ελληνικός AI βοηθός σας'),
+('uk', 'Ukrainian', 'Як я можу вам допомогти', '🇺🇦', 'Марія', 'Ваш український AI помічник'),
+('be', 'Belarusian', 'Як я магу вам дапамагчы', '🇧🇾', 'Марыя', 'Ваш беларускі AI памочнік'),
+('mk', 'Macedonian', 'Како можам да ви помогнам', '🇲🇰', 'Марија', 'Вашиот македонски AI асистент'),
+('sq', 'Albanian', 'Si mund t\'ju ndihmoj', '🇦🇱', 'Marija', 'Asistenti juaj AI në shqip'),
+('bs', 'Bosnian', 'Kako vam mogu pomoći', '🇧🇦', 'Marija', 'Vaš bosanski AI asistent'),
+('me', 'Montenegrin', 'Kako vam mogu pomoći', '🇲🇪', 'Marija', 'Vaš crnogorski AI asistent'),
+
+-- Caucasian Languages
+('ka', 'Georgian', 'როგორ შემიძლია დაგეხმაროთ', '🇬🇪', 'ნინო', 'თქვენი ქართული AI ასისტენტი'),
+('hy', 'Armenian', 'Ինչպես կարող եմ օգնել ձեզ', '🇦🇲', 'Անի', 'Ձեր հայերեն AI օգնականը'),
+('az', 'Azerbaijani', 'Sizə necə kömək edə bilərəm', '🇦🇿', 'Aysu', 'Sizin Azərbaycan AI köməkçiniz'),
+
+-- Central Asian Languages
+('kk', 'Kazakh', 'Сізге қалай көмектесе аламын', '🇰🇿', 'Айгүл', 'Сіздің қазақ AI көмекшісіңіз'),
+('ky', 'Kyrgyz', 'Сизге кантип жардам бере алам', '🇰🇬', 'Айгүл', 'Сиздин кыргыз AI жардамчыңыз'),
+('uz', 'Uzbek', 'Sizga qanday yordam bera olaman', '🇺🇿', 'Gulnora', 'Sizning o\'zbek AI yordamchingiz'),
+('tg', 'Tajik', 'Чӣ тавр ман метавонам ба шумо кӯмак кунам', '🇹🇯', 'Гулнора', 'Ёрирасон AI тоҷикии шумо'),
+('tk', 'Turkmen', 'Size nädip kömek edip bilerin', '🇹🇲', 'Gulnara', 'Siziň türkmen AI ýardamçyňyz'),
+('mn', 'Mongolian', 'Би танд хэрхэн тусалж болох вэ', '🇲🇳', 'Батцэцэг', 'Таны монгол AI туслах'),
+
+-- African Languages
+('am', 'Amharic', 'እንዴት ልረዳዎት እችላለሁ', '🇪🇹', 'ሰላም', 'የእርስዎ አማርኛ AI አገልግሎት'),
+('sw', 'Swahili', 'Ninawezaje kukusaidia', '🇹🇿', 'Aisha', 'Msaidizi wako wa AI wa Kiswahili'),
+('yo', 'Yoruba', 'Báwo ni mo ṣe le rànwọ́ fún ọ', '🇳🇬', 'Folake', 'Olùrànlọ́wọ́ AI rẹ ni èdè Yorùbá'),
+('ig', 'Igbo', 'Kedu ka m ga-esi nyere gị aka', '🇳🇬', 'Chioma', 'Onye enyemaka AI gị n\'asụsụ Igbo'),
+('ha', 'Hausa', 'Yaya zan iya taimaka maka', '🇳🇬', 'Fatima', 'Mataimakin AI naka na Hausa'),
+('zu', 'Zulu', 'Ngingakusiza kanjani', '🇿🇦', 'Nokuthula', 'Umsizi wakho we-AI ngesiZulu'),
+('xh', 'Xhosa', 'Ndingakunceda njani', '🇿🇦', 'Noluthando', 'Umncedi wakho we-AI ngesiXhosa'),
+('af', 'Afrikaans', 'Hoe kan ek u help', '🇿🇦', 'Marietjie', 'U Afrikaanse AI-assistent'),
+('st', 'Sotho', 'Ke ka u thusa jwang', '🇿🇦', 'Mpho', 'Mothusi wa hao wa AI ka Sesotho'),
+('tn', 'Tswana', 'Ke ka go thusa jang', '🇿🇦', 'Boitumelo', 'Mothusi wa gago wa AI ka Setswana'),
+('ss', 'Swati', 'Ngingakusita njani', '🇸🇿', 'Nokuthula', 'Umsizi wakho we-AI ngesiSwati'),
+('ve', 'Venda', 'Ndi nga u thusa hani', '🇿🇦', 'Mudzunga', 'Muthusi wa vhau wa AI nga Tshivenda'),
+('ts', 'Tsonga', 'Ndza ku pfuna njhani', '🇿🇦', 'Ntsakisi', 'Mupfuni wa wena wa AI hi Xitsonga'),
+('nr', 'Ndebele', 'Ngingakusiza kanjani', '🇿🇦', 'Nokuthula', 'Umsizi wakho we-AI ngesiNdebele');
+
+-- Insert default language detection rules
+INSERT OR IGNORE INTO language_detection_rules (country_code, default_language_code, priority) VALUES
+-- India - prioritize major languages
+('IN', 'en', 1),
+('IN', 'hi', 2),
+('IN', 'kn', 3),
+('IN', 'ta', 4),
+('IN', 'te', 5),
+('IN', 'ml', 6),
+('IN', 'bn', 7),
+('IN', 'gu', 8),
+('IN', 'mr', 9),
+('IN', 'pa', 10),
+('IN', 'or', 11),
+('IN', 'as', 12),
+('IN', 'ur', 13),
+
+-- Other countries
+('US', 'en', 1),
+('GB', 'en', 1),
+('CA', 'en', 1),
+('AU', 'en', 1),
+('DE', 'de', 1),
+('FR', 'fr', 1),
+('ES', 'es', 1),
+('IT', 'it', 1),
+('PT', 'pt', 1),
+('NL', 'nl', 1),
+('BE', 'nl', 1),
+('BE', 'fr', 2),
+('CH', 'de', 1),
+('CH', 'fr', 2),
+('CH', 'it', 3),
+('AT', 'de', 1),
+('SE', 'sv', 1),
+('NO', 'no', 1),
+('DK', 'da', 1),
+('FI', 'fi', 1),
+('PL', 'pl', 1),
+('CZ', 'cs', 1),
+('SK', 'sk', 1),
+('HU', 'hu', 1),
+('RO', 'ro', 1),
+('BG', 'bg', 1),
+('HR', 'hr', 1),
+('RS', 'sr', 1),
+('SI', 'sl', 1),
+('EE', 'et', 1),
+('LV', 'lv', 1),
+('LT', 'lt', 1),
+('MT', 'mt', 1),
+('IE', 'ga', 1),
+('IS', 'is', 1),
+('RU', 'ru', 1),
+('UA', 'uk', 1),
+('BY', 'be', 1),
+('MK', 'mk', 1),
+('AL', 'sq', 1),
+('BA', 'bs', 1),
+('ME', 'me', 1),
+('GE', 'ka', 1),
+('AM', 'hy', 1),
+('AZ', 'az', 1),
+('KZ', 'kk', 1),
+('KG', 'ky', 1),
+('UZ', 'uz', 1),
+('TJ', 'tg', 1),
+('TM', 'tk', 1),
+('MN', 'mn', 1),
+('CN', 'zh', 1),
+('JP', 'ja', 1),
+('KR', 'ko', 1),
+('TH', 'th', 1),
+('VN', 'vi', 1),
+('ID', 'id', 1),
+('MY', 'ms', 1),
+('PH', 'tl', 1),
+('KH', 'km', 1),
+('LA', 'lo', 1),
+('MM', 'my', 1),
+('LK', 'si', 1),
+('NP', 'ne', 1),
+('ET', 'am', 1),
+('TZ', 'sw', 1),
+('NG', 'yo', 1),
+('NG', 'ig', 2),
+('NG', 'ha', 3),
+('ZA', 'zu', 1),
+('ZA', 'xh', 2),
+('ZA', 'af', 3),
+('ZA', 'st', 4),
+('ZA', 'tn', 5),
+('ZA', 've', 6),
+('ZA', 'ts', 7),
+('ZA', 'nr', 8),
+('SZ', 'ss', 1),
+('TR', 'tr', 1),
+('SA', 'ar', 1),
+('IR', 'fa', 1),
+('IL', 'he', 1),
+('GR', 'el', 1);
+
+-- Create indexes for better performance
+CREATE INDEX IF NOT EXISTS idx_languages_code ON languages(code);
+CREATE INDEX IF NOT EXISTS idx_languages_active ON languages(is_active);
+CREATE INDEX IF NOT EXISTS idx_user_preferences_user_id ON user_language_preferences(user_id);
+CREATE INDEX IF NOT EXISTS idx_language_detection_country ON language_detection_rules(country_code); 

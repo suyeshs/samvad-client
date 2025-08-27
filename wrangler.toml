@@ -1,0 +1,38 @@
+name = "bolbachan-ekbachan"
+main = "worker-entry.ts"
+compatibility_date = "2024-01-01"
+
+[env.production]
+name = "bolbachan-ekbachan"
+
+[env.staging]
+name = "bolbachan-ekbachan-staging"
+
+[[env.production.d1_databases]]
+binding = "DB"
+database_name = "bolbachan-db"
+database_id = "your-d1-database-id"
+
+[[env.staging.d1_databases]]
+binding = "DB"
+database_name = "bolbachan-db-staging"
+database_id = "your-d1-database-id-staging"
+
+[[env.production.kv_namespaces]]
+binding = "LANGUAGE_CACHE"
+id = "your-kv-namespace-id"
+preview_id = "your-kv-preview-id"
+
+[[env.staging.kv_namespaces]]
+binding = "LANGUAGE_CACHE"
+id = "your-kv-namespace-id-staging"
+preview_id = "your-kv-preview-id-staging"
+
+[env.production.vars]
+ENVIRONMENT = "production"
+
+[env.staging.vars]
+ENVIRONMENT = "staging"
+
+[env.development.vars]
+ENVIRONMENT = "development" 

@@ -2,10 +2,10 @@
  * For more details on how to configure Wrangler, refer to:
  * https://developers.cloudflare.com/workers/wrangler/configuration/
  */
-{
+ {
 	"$schema": "node_modules/wrangler/config-schema.json",
-	"name": "bolbachan1",
-	"main": ".open-next/worker.js",
+	"name": "finance-advisor-frontend",
+	"main": "worker-entry.ts",
 	"compatibility_date": "2025-03-01",
 	"compatibility_flags": [
 		"nodejs_compat",
@@ -17,7 +17,7 @@
 	},
 	"observability": {
 		"enabled": true
-	}
+	},
 	/**
 	 * Smart Placement
 	 * Docs: https://developers.cloudflare.com/workers/configuration/smart-placement/#smart-placement
@@ -32,10 +32,54 @@
 	 */
 
 	/**
+	 * D1 Database Binding
+	 * For storing structured data like chat history or financial metadata.
+	 * Database ID provided; create via `wrangler d1 create finance-rag-db` if not exists.
+	 * https://developers.cloudflare.com/d1/configuration/wrangler-configuration/
+	 */
+	"d1_databases": [
+		{
+			"binding": "FINANCE_DB",
+			"database_name": "finance-rag-db",
+			"database_id": "1dc290b8-cee0-47c0-a8ee-88ba0d0b2702",
+			"migrations_dir": "migrations"
+		}
+	],
+
+	/**
+	 * Vectorize Index Binding
+	 * For RAG-based vector search on personal finance, credit, etc., embeddings.
+	 * Index name: finance-rag-index-bb
+	 * Create index first via: wrangler vectorize create finance-rag-index-bb --dimensions=1024 --metric=cosine
+	 * Description (not in config): Index for personal finance, credit, …
+	 * https://developers.cloudflare.com/vectorize/platform/wrangler/
+	 */
+	"vectorize": [
+		{
+			"binding": "FINANCE_RAG_INDEX",
+			"index_name": "finance-rag-index-bb"
+		}
+	],
+
+	/**
+	 * Workers AI Binding
+	 * For AI model inference (e.g., text generation in RAG pipeline).
+	 * Limited to one per project; use @cf models via runModel.
+	 * https://developers.cloudflare.com/workers-ai/configuration/wrangler-configuration/
+	 */
+	"ai": {
+		"binding": "AI"
+	},
+
+	/**
 	 * Environment Variables
 	 * https://developers.cloudflare.com/workers/wrangler/configuration/#environment-variables
 	 */
-	// "vars": { "MY_VARIABLE": "production_value" },
+	"vars": {
+		"SARVAM_API_KEY": "sk_q7xxezr2_Tzu7dROS8MdkvEeOWS7SExNg",
+		"CLOUDFLARE_ACCOUNT_ID": "YOUR_CLOUDFLARE_ACCOUNT_ID",
+		"CLOUDFLARE_API_TOKEN": "YOUR_CLOUDFLARE_API_TOKEN"
+	},
 	/**
 	 * Note: Use secrets to store sensitive data.
 	 * https://developers.cloudflare.com/workers/configuration/secrets/
