@@ -87,18 +87,28 @@ export const voiceAssistantMachine = createMachine({
       }),
       on: {
         LISTEN: 'listening',
+        SPEECH_START: 'listening', // Allow direct transition from ready to listening
         RESPONSE_READY: 'responding',
         CLEAR_ERROR: { actions: assign({ error: null }) },
         ERROR: { target: 'error', actions: assign({ error: 'An error occurred' }) }
       }
     },
     listening: {
-      entry: assign({ 
-        error: null,
-      }),
+      entry: [
+        assign({ 
+          error: null,
+        }),
+        () => console.log('[XState] Entered listening state')
+      ],
       on: {
-        SPEECH_START: 'listening',
-        SPEECH_END: 'processing',
+        SPEECH_START: {
+          target: 'listening',
+          actions: () => console.log('[XState] SPEECH_START received in listening state')
+        },
+        SPEECH_END: {
+          target: 'processing',
+          actions: () => console.log('[XState] SPEECH_END received, transitioning to processing')
+        },
         RESPONSE_READY: 'responding',
         INTERRUPT: 'interrupted',
         CLEAR_ERROR: { actions: assign({ error: null }) },
@@ -106,11 +116,17 @@ export const voiceAssistantMachine = createMachine({
       }
     },
     processing: {
-      entry: assign({ 
-        error: null,
-      }),
+      entry: [
+        assign({ 
+          error: null,
+        }),
+        () => console.log('[XState] Entered processing state')
+      ],
       on: {
-        RESPONSE_READY: 'responding',
+        RESPONSE_READY: {
+          target: 'responding',
+          actions: () => console.log('[XState] RESPONSE_READY received, transitioning to responding')
+        },
         INTERRUPT: 'interrupted',
         CLEAR_ERROR: { actions: assign({ error: null }) },
         ERROR: { target: 'error', actions: assign({ error: 'An error occurred' }) }

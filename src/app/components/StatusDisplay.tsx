@@ -20,12 +20,12 @@ export const StatusDisplay = ({ status, isProcessingState, voiceUIStore }: {
           {status === 'Error' && 'Error'}
         </div>
         <div className="text-xs text-cyan-300/80">
-          {status === 'Not Started' && 'Click Start to begin your voice assistant'}
+          {status === 'Not Started' && 'Click Start to begin'}
           {status === 'Starting...' && 'Requesting permissions and connecting...'}
-          {status === 'System Ready' && 'Speak now to interact with your assistant'}
+          {status === 'System Ready' && 'You may speak now'}
           {status === 'Listening...' && 'I can hear you...'}
-          {status === 'Processing...' && 'Drishthi is analyzing your request and preparing a response...'}
-          {status === 'Responding...' && 'Drishthi is speaking your response...'}
+          {status === 'Processing...' && 'thinking...'}
+          {status === 'Responding...' && 'speaking...'}
           {status === 'Interrupted' && 'Conversation interrupted'}
         </div>
         
@@ -43,7 +43,7 @@ export const StatusDisplay = ({ status, isProcessingState, voiceUIStore }: {
               <div className="w-3 h-3 bg-magenta-500 rounded-full animate-bounce shadow-lg shadow-magenta-500/50" style={{ animationDelay: '0.2s' }}></div>
             </div>
             <div className="text-xs text-cyan-300/60 font-medium">
-              Processing your request...
+              Connecting...
             </div>
           </div>
         )}
@@ -56,7 +56,7 @@ export const StatusDisplay = ({ status, isProcessingState, voiceUIStore }: {
               <div className="w-3 h-3 bg-red-300 rounded-full animate-pulse shadow-lg shadow-red-300/50" style={{ animationDelay: '0.4s' }}></div>
             </div>
             <div className="text-xs text-red-300/80 font-medium">
-              Drishthi is speaking...
+              ...
             </div>
           </div>
         )}

@@ -22,8 +22,10 @@ import { LanguageDetectionService, LanguageConfig, CFData, DEFAULT_LANGUAGES } f
 export class PermissionsStore {
   audioPermission: 'granted' | 'denied' | 'prompt' | 'not-supported' = 'prompt';
   videoPermission: 'granted' | 'denied' | 'prompt' | 'not-supported' = 'prompt';
+  audioPlaybackPermission: 'granted' | 'denied' | 'prompt' | 'not-supported' = 'prompt';
   isRequestingAudio = false;
   isRequestingVideo = false;
+  isRequestingAudioPlayback = false;
   mediaDevicesSupported = false;
   
   constructor() {
@@ -162,12 +164,85 @@ export class PermissionsStore {
     }
   }
   
+  /**
+   * Request audio playback permission for Safari compatibility
+   * 
+   * Safari requires explicit user interaction before allowing audio playback.
+   * This method creates a silent audio context and attempts to play a silent
+   * audio buffer to unlock audio playback capabilities.
+   * 
+   * @returns {Promise<boolean>} True if playback permission granted, false otherwise
+   */
+  async requestAudioPlaybackPermission() {
+    if (this.audioPlaybackPermission === 'granted') {
+      return true;
+    }
+    
+    runInAction(() => {
+      this.isRequestingAudioPlayback = true;
+    });
+    
+    try {
+      // Create a silent audio context to unlock audio playback
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      
+      // Resume audio context if suspended (required for Safari)
+      if (audioContext.state === 'suspended') {
+        await audioContext.resume();
+      }
+      
+      // Create a silent audio buffer
+      const buffer = audioContext.createBuffer(1, 1, 22050);
+      const source = audioContext.createBufferSource();
+      source.buffer = buffer;
+      source.connect(audioContext.destination);
+      
+      // Play the silent audio to unlock audio capabilities
+      source.start(0);
+      source.stop(0.001);
+      
+      runInAction(() => {
+        this.audioPlaybackPermission = 'granted';
+      });
+      
+      console.log('[Permissions] Audio playback permission granted');
+      return true;
+    } catch (error) {
+      console.warn('[Permissions] Audio playback permission failed:', error);
+      runInAction(() => {
+        this.audioPlaybackPermission = 'denied';
+      });
+      return false;
+    } finally {
+      runInAction(() => {
+        this.isRequestingAudioPlayback = false;
+      });
+    }
+  }
+  
   get canUseAudio(): boolean {
     return this.mediaDevicesSupported && this.audioPermission === 'granted';
   }
   
   get needsAudioPermission(): boolean {
     return this.mediaDevicesSupported && this.audioPermission === 'prompt';
+  }
+  
+  get canPlayAudio(): boolean {
+    return this.audioPlaybackPermission === 'granted';
+  }
+  
+  get needsAudioPlaybackPermission(): boolean {
+    return this.audioPlaybackPermission === 'prompt';
+  }
+  
+  get isSafari(): boolean {
+    if (typeof window === 'undefined') return false;
+    return /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+  }
+  
+  get needsSafariAudioUnlock(): boolean {
+    return this.isSafari && this.audioPlaybackPermission !== 'granted';
   }
 }
 

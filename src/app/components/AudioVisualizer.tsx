@@ -43,47 +43,11 @@ export const AudioVisualizer = ({ voiceUIStore, isListening, isSpeaking }: {
               })}
             </div>
             
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className={`w-16 h-16 rounded-full flex items-center justify-center ${
-                isSpeaking ? 'bg-red-500/20 border-2 border-red-500' :
-                isListening ? 'bg-cyan-500/20 border-2 border-cyan-500' :
-                'bg-green-500/20 border-2 border-green-500'
-              }`}>
-                <div className={`text-2xl ${
-                  isSpeaking ? 'text-red-400' :
-                  isListening ? 'text-cyan-400' :
-                  'text-green-400'
-                }`}>
-                  {isSpeaking ? '🔊' : isListening ? '🎤' : '✨'}
-                </div>
-              </div>
-            </div>
+           
           </div>
         </div>
   
-        {/* Horizontal Audio Waveform */}
-        <div className="flex items-center justify-center space-x-1 mb-6">
-          {voiceUIStore.audioBars.slice(0, 20).map((height: number, index: number) => {
-            const hue = 180 + (index / Math.max(voiceUIStore.audioBars.length, 1)) * 120;
-            const color = `hsl(${hue}, 70%, 60%)`;
-            
-            return (
-              <div
-                key={index}
-                className="rounded-full transition-all duration-75 ease-out"
-                style={{ 
-                  width: '5px',
-                  height: `${Math.max(Math.min(height, 70), 4)}px`,
-                  backgroundColor: color,
-                  boxShadow: `0 0 8px ${color}`,
-                  minHeight: '4px',
-                  maxHeight: '70px',
-                  opacity: height > 15 ? 1 : height > 8 ? 0.8 : 0.6
-                }}
-              />
-            );
-          })}
-        </div>
+       
   
 
       </div>

@@ -31,6 +31,8 @@ import { AudioVisualizer } from './components/AudioVisualizer';
 import { StatusDisplay } from './components/StatusDisplay';
 import { PermissionsStatus } from './components/PermissionsStatus';
 import { StartButton } from './components/StartButton';
+import { SafariAudioPermission } from './components/SafariAudioPermission';
+import { WebSocketManager, createWebSocketManager, WebSocketMessage, MessageThrottler } from './websocket-utils';
 
 /**
  * Performance Configuration Object
@@ -191,7 +193,9 @@ export default observer(function VADVoiceClient() {
   const [isStarted, setIsStarted] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [hasSelectedLanguage, setHasSelectedLanguage] = useState(false);
-  const wsRef = useRef<WebSocket | null>(null);
+  const [showSafariAudioPermission, setShowSafariAudioPermission] = useState(false);
+  const wsManagerRef = useRef<WebSocketManager | null>(null);
+  const messageThrottlerRef = useRef<MessageThrottler | null>(null);
   const vadRef = useRef<{ start: () => void; destroy: () => void } | null>(null);
   const isProcessingRef = useRef(false);
   const audioBarsIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -200,7 +204,7 @@ export default observer(function VADVoiceClient() {
   const conversationActiveRef = useRef(false);
   const lastInterruptionTimeRef = useRef(0);
   const vadPausedRef = useRef(false);
-    const pingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+    // WebSocket manager handles ping intervals automatically
   const currentAudioElementRef = useRef<HTMLAudioElement | null>(null);
   const stateUpdateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const failedAudioAttemptsRef = useRef(0);
@@ -236,55 +240,52 @@ export default observer(function VADVoiceClient() {
   const stopMicBarsRef = useRef<any>(null);
   const audioContextManagerRef = useRef<any>(null);
   
-  // Add state transition logging
-  useEffect(() => {
-    console.log('[XState] State changed to:', state.value);
-  }, [state.value]);
+  // State transition logging - using XState's built-in logging instead of useEffect
+  // This is more efficient as it's handled by the state machine itself
 
-  // Update refs when dependencies change
+  // Update refs when dependencies change - using useEffect to prevent infinite re-renders
   useEffect(() => {
     sendRef.current = debouncedSend;
+  }, [debouncedSend]);
+  
+  // Update store refs in a separate useEffect to avoid dependency issues
+  useEffect(() => {
     voiceUIStoreRef.current = voiceUIStore;
     languageStoreRef.current = languageStore;
     audioContextManagerRef.current = audioContextManager;
-  }, [debouncedSend, voiceUIStore, languageStore, audioContextManager]);
+  }, []);
   
-  // Add TTS error listener with enhanced multilingual support
+  // TTS error handler - simplified to prevent infinite re-renders
+  const handleTTSError = useCallback((event: CustomEvent) => {
+    console.log('[VADVoiceClient] TTS error detected:', event.detail);
+    
+    // Reset processing state
+    isProcessingRef.current = false;
+    conversationActiveRef.current = false;
+    setIsProcessing(false);
+    
+    // Ensure VAD is resumed - use ref to avoid dependency issues
+    if (vadPausedRef.current && vadRef.current) {
+      console.log('[VADVoiceClient] Resuming VAD after TTS error');
+      vadRef.current.start();
+      vadPausedRef.current = false;
+    }
+    
+    // Clear any previous errors and transition to listening state
+    // Use refs to avoid dependency issues
+    if (sendRef.current) {
+      sendRef.current({ type: 'LISTEN' });
+      sendRef.current({ type: 'CLEAR_ERROR' });
+    }
+  }, [setIsProcessing]);
+
+  // Add TTS error listener - only once on mount
   useEffect(() => {
-    const handleTTSError = (event: CustomEvent) => {
-      console.log('[VADVoiceClient] TTS error detected:', event.detail);
-      
-      // If we're in responding state and TTS fails, transition to listening
-      if (state.matches('responding')) {
-        console.log('[VADVoiceClient] TTS failed in responding state, transitioning to listening');
-        
-        // Reset processing state
-        isProcessingRef.current = false;
-        conversationActiveRef.current = false;
-        setIsProcessing(false);
-        
-        // Ensure VAD is resumed - use ref to avoid dependency issues
-        if (vadPausedRef.current && vadRef.current) {
-          console.log('[VADVoiceClient] Resuming VAD after TTS error');
-          vadRef.current.start();
-          vadPausedRef.current = false;
-        }
-        
-        // Clear any previous errors and transition to listening state
-        // Use refs to avoid dependency issues
-        if (sendRef.current) {
-          sendRef.current({ type: 'LISTEN' });
-          sendRef.current({ type: 'CLEAR_ERROR' });
-        }
-      }
-    };
-    
     window.addEventListener('ttsError', handleTTSError as EventListener);
-    
     return () => {
       window.removeEventListener('ttsError', handleTTSError as EventListener);
     };
-  }, []); // Remove state.value dependency to prevent infinite re-renders
+  }, [handleTTSError]);
 
   const vadError = state.context.error;
 
@@ -306,6 +307,16 @@ export default observer(function VADVoiceClient() {
   const isListening = state.matches('listening');
   const isProcessingState = state.matches('processing');
   const isSpeaking = state.matches('responding');
+  
+  // Debug state changes (commented out to prevent infinite re-renders)
+  // console.log('[UI State] Current state:', {
+  //   status,
+  //   isListening,
+  //   isProcessingState,
+  //   isSpeaking,
+  //   audioBarsLength: voiceUIStore.audioBars.length,
+  //   isPlaying: voiceUIStore.isPlaying
+  // });
 
   // Enhanced language change handler with dialect support
   const handleLanguageChange = useCallback((language: LanguageConfig) => {
@@ -322,13 +333,13 @@ export default observer(function VADVoiceClient() {
     setIsStarted(false);
     
     // Update WebSocket if connected
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
+    if (wsManagerRef.current?.isConnected()) {
       const userContext = audioContextManager.getUserContext();
-      wsRef.current.send(JSON.stringify({ 
+      wsManagerRef.current.send({ 
         type: 'init',
         language: language?.code || 'en',
         agent: language?.agentName || 'Drishthi'
-      }));
+      });
     }
   }, [debouncedSend, languageStore, audioContextManager]);
 
@@ -571,8 +582,8 @@ export default observer(function VADVoiceClient() {
             console.log('[VAD] Cleaning up state:', isCleaningUp);
             console.log('[VAD] Current state:', state.value);
             console.log('[VAD] Conversation active:', conversationActiveRef.current);
-            console.log('[VAD] WebSocket state:', wsRef.current?.readyState);
-            console.log('[VAD] WebSocket URL:', wsRef.current?.url);
+            console.log('[VAD] WebSocket state:', wsManagerRef.current?.getState());
+            console.log('[VAD] WebSocket connected:', wsManagerRef.current?.isConnected());
             
             if (isProcessingRef.current || isCleaningUp) {
               console.log('[VAD] Speech start blocked - processing or cleaning up');
@@ -609,11 +620,16 @@ export default observer(function VADVoiceClient() {
               sendRef.current({ type: 'SPEECH_START' });
             }
             console.log('[VAD] SPEECH_START event sent, new state:', state.value);
+            
+            // Start audio bars when user starts speaking
+            if (startMicBarsRef.current) {
+              startMicBarsRef.current();
+            }
           },
           onSpeechEnd: (audio) => {
             console.log('[VAD] Speech end detected, audio length:', audio?.length || 0);
             console.log('[VAD] Processing state:', isProcessingRef.current);
-            console.log('[VAD] WebSocket state:', wsRef.current?.readyState);
+            console.log('[VAD] WebSocket state:', wsManagerRef.current?.getState());
             console.log('[VAD] Current state before speech end:', state.value);
             
             if (isProcessingRef.current || isCleaningUp) {
@@ -623,19 +639,25 @@ export default observer(function VADVoiceClient() {
             
             if (!audio || audio.length === 0) {
               console.log('[VAD] No audio data, sending SPEECH_END');
-              if (sendRef.current) {
-                sendRef.current({ type: 'SPEECH_END' });
-              }
+              send({ type: 'SPEECH_END' });
               return;
             }
             
             console.log('[VAD] Processing speech with audio length:', audio.length);
             console.log('[VAD] Audio data sample:', Array.from(audio.slice(0, 10)));
-            if (sendRef.current) {
-              sendRef.current({ type: 'SPEECH_END' });
-            }
+            
+            // Send SPEECH_END event immediately to transition to processing state
+            console.log('[VAD] Sending SPEECH_END event to transition to processing state');
+            send({ type: 'SPEECH_END' });
+            console.log('[VAD] SPEECH_END event sent, current state:', state.value);
+            
             isProcessingRef.current = true;
             conversationActiveRef.current = false;
+            
+            // Stop audio bars when user stops speaking
+            if (stopMicBarsRef.current) {
+              stopMicBarsRef.current();
+            }
             
             // Add timeout to prevent stuck processing state
             setTimeout(() => {
@@ -695,20 +717,20 @@ export default observer(function VADVoiceClient() {
                   nativeName: languageStoreRef.current?.currentLanguage?.nativeName || 'English'
                 });
                 logWebSocketMessage(audioMessage, 'send');
-                wsRef.current!.send(audioMessage);
+                wsManagerRef.current!.send(JSON.parse(audioMessage));
                 console.log('[VAD] Audio chunk sent successfully');
                 
-                const endMessage = JSON.stringify({ 
+                const endMessage: WebSocketMessage = { 
                   type: 'end_audio',
                   language: languageStoreRef.current?.currentLanguage?.code || 'en',
                   languageGoogle: getLanguageCodeForService('google'),
                   languageSarvam: getLanguageCodeForService('sarvam')
-                });
+                };
                 
                 console.log('[VAD] Sending end_audio message');
                 console.log('[VAD] End audio language:', languageStoreRef.current?.currentLanguage?.code || 'en');
-                logWebSocketMessage(endMessage, 'send');
-                wsRef.current!.send(endMessage);
+                logWebSocketMessage(JSON.stringify(endMessage), 'send');
+                wsManagerRef.current!.send(endMessage);
                 console.log('[VAD] End audio message sent');
                 console.log('[VAD] Audio data sent successfully');
             } catch (error) {
@@ -792,11 +814,7 @@ export default observer(function VADVoiceClient() {
       // Remove event listener
       window.removeEventListener('unhandledrejection', handleUnhandledRejection);
       
-      // Clear ping interval
-      if (pingIntervalRef.current) {
-        clearInterval(pingIntervalRef.current);
-        pingIntervalRef.current = null;
-      }
+      // WebSocket manager handles cleanup automatically
       
       // Clear debounced send timeout
       if (stateUpdateTimeoutRef.current) {
@@ -832,6 +850,18 @@ export default observer(function VADVoiceClient() {
         audioContextManagerRef.current.stopAllAudio();
       }
       
+      // Clean up WebSocket manager
+      if (wsManagerRef.current) {
+        wsManagerRef.current.destroy();
+        wsManagerRef.current = null;
+      }
+      
+      // Clean up message throttler
+      if (messageThrottlerRef.current) {
+        messageThrottlerRef.current.destroy();
+        messageThrottlerRef.current = null;
+      }
+      
       // Destroy VAD with proper error handling
       if (vad && isInitialized) {
         try {
@@ -857,7 +887,23 @@ export default observer(function VADVoiceClient() {
   }, [isStarted]); // Only depend on isStarted to prevent infinite re-renders
 
   const handleRequestPermissions = useCallback(async () => {
+    console.log('[Permissions] Requesting microphone and audio playback permissions...');
     await permissionsStore.requestAudioPermission();
+    
+    // Check if Safari needs audio permission
+    if (permissionsStore.needsSafariAudioUnlock) {
+      setShowSafariAudioPermission(true);
+      return;
+    }
+    
+    // Also request audio playback permission for Safari compatibility
+    await permissionsStore.requestAudioPlaybackPermission();
+    console.log('[Permissions] Permission requests completed');
+  }, [permissionsStore]);
+
+  const handleSafariAudioPermissionGranted = useCallback(() => {
+    setShowSafariAudioPermission(false);
+    console.log('[Permissions] Safari audio permission granted');
   }, []);
 
   const handleCheckMediaDevices = useCallback(() => {
@@ -867,18 +913,18 @@ export default observer(function VADVoiceClient() {
   const reconnectWebSocket = useCallback(() => {
     console.log('[WebSocket] Attempting to reconnect...');
     
-    // Close existing connection if it exists
-    if (wsRef.current && wsRef.current.readyState !== WebSocket.CLOSED) {
-      wsRef.current.close();
+    // WebSocket manager handles reconnection automatically
+    if (wsManagerRef.current) {
+      wsManagerRef.current.connect();
+    } else {
+      // If manager doesn't exist, start a new connection
+      startVoiceAssistant();
     }
-    
-    // Start a new connection
-    startVoiceAssistant();
   }, []);
 
   // Helper function to check if WebSocket is connected and ready
   const isWebSocketConnected = useCallback(() => {
-    return wsRef.current && wsRef.current.readyState === WebSocket.OPEN;
+    return wsManagerRef.current?.isConnected() || false;
   }, []);
 
   /**
@@ -912,6 +958,15 @@ export default observer(function VADVoiceClient() {
           console.log('[WebSocket] Language sent to server:', languageStore.currentLanguage?.code || 'en');
           console.log('[WebSocket] Language name sent to server:', languageStore.currentLanguage?.name || 'English');
           
+          // Enhanced URL debugging
+          console.log('[WebSocket] 🔍 URL Analysis:');
+          console.log('[WebSocket]   - Full URL:', data.url);
+          console.log('[WebSocket]   - URL type:', typeof data.url);
+          console.log('[WebSocket]   - Contains r2.dev:', data.url?.includes('r2.dev'));
+          console.log('[WebSocket]   - Contains localhost:', data.url?.includes('localhost'));
+          console.log('[WebSocket]   - Contains finance-advisor:', data.url?.includes('finance-advisor'));
+          console.log('[WebSocket]   - URL length:', data.url?.length);
+          
           // Determine URL type
           const isR2Bucket = data.url.includes('r2.dev');
           console.log('[WebSocket] URL type:', isR2Bucket ? 'R2 Bucket' : 'Unknown');
@@ -929,6 +984,8 @@ export default observer(function VADVoiceClient() {
           if (data.url && 
               data.url !== 'http://localhost:3000/' && 
               data.url !== 'http://localhost:3000' && 
+              data.url !== 'http://localhost:3001/' && 
+              data.url !== 'http://localhost:3001' && 
               data.url !== 'https://finance-advisor-frontend.suyesh.workers.dev/' &&
               !data.url.includes('localhost') &&
               !data.url.includes('finance-advisor-frontend.suyesh.workers.dev') &&
@@ -956,6 +1013,8 @@ export default observer(function VADVoiceClient() {
               if (!data.url || 
                   data.url === 'http://localhost:3000/' || 
                   data.url === 'http://localhost:3000' ||
+                  data.url === 'http://localhost:3001/' || 
+                  data.url === 'http://localhost:3001' ||
                   data.url === 'https://finance-advisor-frontend.suyesh.workers.dev/' ||
                   data.url.includes('localhost') ||
                   data.url.includes('finance-advisor-frontend.suyesh.workers.dev') ||
@@ -1001,6 +1060,7 @@ export default observer(function VADVoiceClient() {
                 stopAudioBars();
                 isProcessingRef.current = false;
                 conversationActiveRef.current = false;
+                console.log('[WebSocket] Audio bars stopped after TTS ended');
                 
                 // Clean up audio element properly
                 if (currentAudioElementRef.current === audioElement) {
@@ -1057,8 +1117,19 @@ export default observer(function VADVoiceClient() {
               
               // Set the stream URL and start playback
               console.log('[WebSocket] Setting audio src to:', data.url);
-              audioElement.src = data.url;
-              audioElement.preload = 'auto';
+              
+              // Ensure we're setting the correct URL
+              if (data.url && 
+                  data.url !== 'http://localhost:3000/' && 
+                  data.url !== 'http://localhost:3000' &&
+                  data.url !== 'http://localhost:3001/' && 
+                  data.url !== 'http://localhost:3001') {
+                audioElement.src = data.url;
+                audioElement.preload = 'auto';
+                console.log('[WebSocket] Audio src set successfully to:', audioElement.src);
+              } else {
+                throw new Error('Invalid audio URL received from server');
+              }
               
               console.log('[WebSocket] Audio element src after setting:', audioElement.src);
               console.log('[WebSocket] Attempting to load audio from:', data.url);
@@ -1090,6 +1161,7 @@ export default observer(function VADVoiceClient() {
                 console.log('[WebSocket] Audio can play');
                 voiceUIStore.setIsPlaying(true);
                 startAudioBars();
+                console.log('[WebSocket] Audio bars started for TTS playback');
               };
               
               console.log('[WebSocket] Set audio src to stream URL:', data.url);
@@ -1116,58 +1188,92 @@ export default observer(function VADVoiceClient() {
                 }, 100);
               }, 30000); // 30 second timeout for streaming
               
-              // Start playback
+              // Check and request audio playback permission for Safari compatibility
+              console.log('[WebSocket] Checking audio playback permission...');
+              
+              // For Safari, check if we need to show the permission modal
+              if (permissionsStore.needsSafariAudioUnlock) {
+                console.log('[WebSocket] Safari audio permission needed, showing modal');
+                setShowSafariAudioPermission(true);
+                throw new Error('Safari audio permission required');
+              }
+              
+              const playbackGranted = await permissionsStore.requestAudioPlaybackPermission();
+              if (!playbackGranted) {
+                console.error('[WebSocket] Audio playback permission denied');
+                throw new Error('Audio playback permission denied');
+              }
+              
+              // Additional Safari-specific audio context unlock
+              try {
+                const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+                if (audioContext.state === 'suspended') {
+                  console.log('[WebSocket] Resuming suspended audio context for Safari...');
+                  await audioContext.resume();
+                }
+                audioContext.close();
+              } catch (contextError) {
+                console.warn('[WebSocket] Audio context unlock failed:', contextError);
+              }
+              
+              // Start playback with Safari-specific handling
               try {
                 console.log('[WebSocket] Attempting to start stream playback...');
-                await audioElement.play();
-                console.log('[WebSocket] Stream playback started successfully');
+                
+                // Safari-specific audio playback with user interaction check
+                const playPromise = audioElement.play();
+                
+                if (playPromise !== undefined) {
+                  await playPromise;
+                  console.log('[WebSocket] Stream playback started successfully');
+                } else {
+                  console.log('[WebSocket] Play promise undefined, checking if audio is playing...');
+                  // Check if audio is actually playing
+                  if (audioElement.readyState >= 2) { // HAVE_CURRENT_DATA
+                    console.log('[WebSocket] Audio is ready and should be playing');
+                  } else {
+                    throw new Error('Audio not ready for playback');
+                  }
+                }
                 
                 // Clear timeout once playback starts (onplay handler already set above)
                 clearTimeout(playTimeout);
                 console.log('[WebSocket] Stream playback confirmed');
                 
-              } catch (playError) {
-                console.error('[WebSocket] Failed to start stream playback:', playError);
-                
-                // Check if it's a format/source error
-                if (playError instanceof Error && playError.name === 'NotSupportedError') {
-                  console.error('[WebSocket] Audio format not supported or source not accessible');
-                  console.error('[WebSocket] This is likely due to R2 bucket CORS/authentication issues');
+                              } catch (playError) {
+                  console.error('[WebSocket] Failed to start stream playback:', playError);
                   
-                  // Fallback: Simulate successful playback for R2 bucket issues
-                  console.log('[WebSocket] Using fallback: Simulating successful playback');
-                  
-                  // Clean up the failed audio element
-                  if (currentAudioElementRef.current === audioElement) {
-                    currentAudioElementRef.current = null;
+                  // Safari-specific fallback: Try to unlock audio with user interaction simulation
+                  if (playError instanceof Error && playError.name === 'NotAllowedError') {
+                    console.log('[WebSocket] Safari audio permission error, trying fallback...');
+                    
+                    try {
+                      // Create a temporary audio element with user interaction
+                      const tempAudio = new Audio();
+                      tempAudio.src = 'data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIG2m98OScTgwOUarm7blmGgU7k9n1unEiBC13yO/eizEIHWq+8+OWT';
+                      tempAudio.volume = 0;
+                      
+                      // Try to play the silent audio to unlock Safari
+                      await tempAudio.play();
+                      tempAudio.pause();
+                      tempAudio.src = '';
+                      
+                      console.log('[WebSocket] Safari audio unlock successful, retrying original audio...');
+                      
+                      // Retry the original audio
+                      await audioElement.play();
+                      console.log('[WebSocket] Stream playback started successfully after Safari unlock');
+                      
+                    } catch (fallbackError) {
+                      console.error('[WebSocket] Safari fallback also failed:', fallbackError);
+                      throw playError; // Re-throw original error
+                    }
+                  } else {
+                    throw playError; // Re-throw non-Safari errors
                   }
-                  audioElement.pause();
-                  audioElement.src = '';
-                  
-                  voiceUIStore.setIsPlaying(true);
-                  startAudioBars();
-                  
-                  // Simulate audio duration (3 seconds)
-                  setTimeout(() => {
-                    console.log('[WebSocket] Fallback playback completed');
-                    voiceUIStore.setIsPlaying(false);
-                    voiceUIStore.setIsInterruptible(false);
-                    stopAudioBars();
-                    isProcessingRef.current = false;
-                    conversationActiveRef.current = false;
-                    
-                    // Resume VAD after simulated playback
-                    setTimeout(() => {
-                      resumeVAD();
-                    }, 100);
-                    
-                    // Transition back to listening state
-                    debouncedSend({ type: 'LISTEN' });
-                    debouncedSend({ type: 'CLEAR_ERROR' });
-                  }, 3000);
-                  
-                  return; // Don't proceed with error cleanup
-                }
+                
+                // Handle other audio playback errors
+                console.error('[WebSocket] Audio playback failed:', playError);
                 console.error('[WebSocket] Failed to start stream playback:', playError);
                 clearTimeout(playTimeout);
                 
@@ -1365,7 +1471,7 @@ export default observer(function VADVoiceClient() {
       console.error('[WebSocket] Error parsing message:', error);
       console.error('[WebSocket] Raw message data:', event.data);
     }
-  }, [voiceUIStore, startAudioBars, stopAudioBars, debouncedSend, pauseVAD, resumeVAD]);
+  }, [voiceUIStore, startAudioBars, stopAudioBars, debouncedSend, pauseVAD, resumeVAD, permissionsStore]);
 
   // Enhanced WebSocket message logger
   const logWebSocketMessage = (message: string, type: 'send' | 'receive') => {
@@ -1409,18 +1515,14 @@ export default observer(function VADVoiceClient() {
       stopAudioBars();
     }
     
-    // Clear ping interval
-    if (pingIntervalRef.current) {
-      clearInterval(pingIntervalRef.current);
-      pingIntervalRef.current = null;
-    }
+    // WebSocket manager handles ping intervals automatically
     
     // Unlock audio context
     audioContextManager.unlockAudioContext();
     
     // Send interrupt signal to server
     if (isWebSocketConnected()) {
-      wsRef.current!.send(JSON.stringify({ type: 'interrupt' }));
+      wsManagerRef.current!.send({ type: 'interrupt' });
     } else {
       console.log('[Interrupt] WebSocket not connected, skipping interrupt message');
     }
@@ -1461,6 +1563,13 @@ export default observer(function VADVoiceClient() {
         throw new Error('Audio permission is required to use the voice assistant');
       }
       
+      // Request audio playback permission for Safari compatibility
+      if (permissionsStore.needsSafariAudioUnlock) {
+        setShowSafariAudioPermission(true);
+        return; // Don't proceed until permission is granted
+      }
+      await permissionsStore.requestAudioPlaybackPermission();
+      
       // Initialize audio context with user interaction
       try {
         await audioContextManager.initializeAudioContext();
@@ -1474,111 +1583,105 @@ export default observer(function VADVoiceClient() {
       // Track performance start
       trackPerformance('connection_start');
       
-      // Initialize WebSocket connection
+      // Initialize WebSocket connection using the manager
       const session = crypto.randomUUID();
-      
-      // Use remote Cloudflare worker WebSocket endpoint
       const wsUrl = `wss://bolbachan-ekbachan.suyesh.workers.dev/api/ws?session=${session}`;
       
-      const ws = new WebSocket(wsUrl);
-      wsRef.current = ws;
-
-      // Optimized connection timeout for faster response
-      const connectionTimeout = setTimeout(() => {
-        if (ws.readyState === WebSocket.CONNECTING) {
-          ws.close();
-          debouncedSend({ type: 'ERROR', error: 'Connection timeout - server not responding' });
-        }
-      }, PERFORMANCE_CONFIG.CONNECTION_TIMEOUT); // Reduced timeout for faster response
-
-      ws.onopen = () => {
-        clearTimeout(connectionTimeout);
-        console.log('[WebSocket] Connection opened successfully');
-        setIsStarted(true);
-        send({ type: 'READY' });
-        debouncedSend({ type: 'CLEAR_ERROR' }); // Clear any previous errors
-        
-        // Send initialization message to server
-        const initMessage = JSON.stringify({ 
-          type: 'init',
-          language: languageStore.currentLanguage?.code || 'en',
-          agent: languageStore.currentLanguage?.agentName || 'Drishthi'
-        });
-        
-        logWebSocketMessage(initMessage, 'send');
-        ws.send(initMessage);
-        
-        // Optimized ping interval for faster connection monitoring
-        pingIntervalRef.current = setInterval(() => {
-          if (ws.readyState === WebSocket.OPEN) {
-            const pingMessage = JSON.stringify({ type: 'ping' });
-            logWebSocketMessage(pingMessage, 'send');
-            ws.send(pingMessage);
-          } else {
-            console.log('[WebSocket] Connection lost during ping, attempting to reconnect...');
-            reconnectWebSocket();
+      // Create WebSocket manager with optimized configuration
+      const wsManager = createWebSocketManager(wsUrl, {
+        onOpen: () => {
+          console.log('[WebSocket] Connection opened successfully');
+          setIsStarted(true);
+          send({ type: 'READY' });
+          debouncedSend({ type: 'CLEAR_ERROR' });
+          
+          // Send initialization message to server
+          const initMessage: WebSocketMessage = { 
+            type: 'init',
+            language: languageStore.currentLanguage?.code || 'en',
+            agent: languageStore.currentLanguage?.agentName || 'Drishthi'
+          };
+          
+          logWebSocketMessage(JSON.stringify(initMessage), 'send');
+          wsManager.send(initMessage);
+          
+          // WebSocket connection established successfully
+          console.log('[WebSocket] Connected with language:', languageStore.currentLanguage?.code || 'en');
+          
+          // Start VAD listening after connection is ready
+          console.log('[WebSocket] Starting VAD listening...');
+          if (vadRef.current) {
+            vadRef.current.start();
+            console.log('[WebSocket] VAD started successfully');
           }
-        }, PERFORMANCE_CONFIG.PING_INTERVAL); // Reduced ping interval for faster response
+          
+          // Transition to listening state
+          console.log('[WebSocket] Transitioning to listening state...');
+          send({ type: 'LISTEN' });
+        },
         
-        // WebSocket connection established successfully
-        console.log('[WebSocket] Connected with language:', languageStore.currentLanguage?.code || 'en');
-      };
-
-      ws.onclose = (event) => {
-        console.log('[WebSocket] Connection closed:', {
-          code: event.code,
-          reason: event.reason,
-          wasClean: event.wasClean
-        });
-        setIsStarted(false);
+        onClose: (code, reason) => {
+          console.log('[WebSocket] Connection closed:', { code, reason });
+          setIsStarted(false);
+          
+          // Clear debounced send timeout
+          if (stateUpdateTimeoutRef.current) {
+            clearTimeout(stateUpdateTimeoutRef.current);
+            stateUpdateTimeoutRef.current = null;
+          }
+          
+          // If connection fails, show a helpful message
+          if (code === 1006 || code === 1002) {
+            console.error('[WebSocket] Connection failed with code:', code);
+            debouncedSend({ type: 'ERROR', error: 'Cannot connect to voice assistant server. Please check your internet connection and try again.' });
+          } else if (code === 1000 || code === 1001) {
+            // Normal closure or going away - don't show error, just log
+            console.log('[WebSocket] Normal connection closure');
+          } else {
+            console.error('[WebSocket] Connection closed with code:', code, 'reason:', reason);
+            debouncedSend({ type: 'ERROR', error: `WebSocket closed: ${reason || 'Unknown reason'}` });
+          }
+        },
         
-        // Clear ping interval
-        if (pingIntervalRef.current) {
-          clearInterval(pingIntervalRef.current);
-          pingIntervalRef.current = null;
+        onError: (error) => {
+          console.error('[WebSocket] Connection error:', error);
+          setIsStarted(false);
+          
+          // Clear debounced send timeout
+          if (stateUpdateTimeoutRef.current) {
+            clearTimeout(stateUpdateTimeoutRef.current);
+            stateUpdateTimeoutRef.current = null;
+          }
+          
+          debouncedSend({ type: 'ERROR', error: 'Failed to connect to voice assistant' });
+        },
+        
+        onMessage: (data) => {
+          // Convert WebSocketMessage to MessageEvent for compatibility
+          const event = {
+            data: JSON.stringify(data)
+          } as MessageEvent;
+          handleWebSocketMessage(event);
+        },
+        
+        onReconnect: (attempt) => {
+          console.log('[WebSocket] Reconnection attempt:', attempt);
+        },
+        
+        onReconnectFailed: () => {
+          console.error('[WebSocket] Max reconnection attempts reached');
+          debouncedSend({ type: 'ERROR', error: 'Connection lost. Please try again.' });
         }
-        
-        // Clear debounced send timeout
-        if (stateUpdateTimeoutRef.current) {
-          clearTimeout(stateUpdateTimeoutRef.current);
-          stateUpdateTimeoutRef.current = null;
-        }
-        
-        // If connection fails, show a helpful message
-        if (event.code === 1006 || event.code === 1002) {
-          console.error('[WebSocket] Connection failed with code:', event.code);
-          debouncedSend({ type: 'ERROR', error: 'Cannot connect to voice assistant server. Please check your internet connection and try again.' });
-        } else if (event.code === 1000 || event.code === 1001) {
-          // Normal closure or going away - don't show error, just log
-          console.log('[WebSocket] Normal connection closure');
-        } else {
-          console.error('[WebSocket] Connection closed with code:', event.code, 'reason:', event.reason);
-          debouncedSend({ type: 'ERROR', error: `WebSocket closed: ${event.reason || 'Unknown reason'}` });
-        }
-      };
-
-      ws.onerror = (error) => {
-        console.error('[WebSocket] Connection error:', error);
-        setIsStarted(false);
-        
-        // Clear ping interval
-        if (pingIntervalRef.current) {
-          clearInterval(pingIntervalRef.current);
-          pingIntervalRef.current = null;
-        }
-        
-        // Clear debounced send timeout
-        if (stateUpdateTimeoutRef.current) {
-          clearTimeout(stateUpdateTimeoutRef.current);
-          stateUpdateTimeoutRef.current = null;
-        }
-        
-        debouncedSend({ type: 'ERROR', error: 'Failed to connect to voice assistant' });
-      };
-
-      ws.onmessage = (event) => {
-        handleWebSocketMessage(event);
-      };
+      });
+      
+      // Store the manager reference
+      wsManagerRef.current = wsManager;
+      
+      // Create message throttler for efficient message sending
+      messageThrottlerRef.current = new MessageThrottler(100);
+      
+      // Connect using the manager
+      wsManager.connect();
       
     } catch (error) {
       debouncedSend({ type: 'ERROR', error: `Failed to start: ${error instanceof Error ? error.message : 'Unknown error'}` });
@@ -1634,6 +1737,14 @@ export default observer(function VADVoiceClient() {
 
   return (
     <div className="relative w-full max-w-md mx-auto">
+      {/* Safari Audio Permission Modal */}
+      {showSafariAudioPermission && (
+        <SafariAudioPermission
+          permissionsStore={permissionsStore}
+          onPermissionGranted={handleSafariAudioPermissionGranted}
+        />
+      )}
+      
       <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-blue-900 to-purple-900 rounded-3xl">
         <div className="absolute inset-0 opacity-30">
           {Array.from({ length: 50 }).map((_, i) => (
