@@ -33,7 +33,7 @@ import {
 } from "./services/LanguageDetectionService";
 import { HttpVoiceService } from "./services/HttpVoiceService";
 import useAudioPlayer from "./hooks/useAudioPlayer";
-import { float32ArrayToWav, uint8ArrayToBase64 } from "./utils/audioUtils";
+import { float32ArrayToWav } from "./utils/audioUtils";
 
 import LanguageSelection from "./components/LanguageSelection";
 import { Header } from "./components/Header";
@@ -198,6 +198,8 @@ export default function VADVoiceClient() {
   );
   const [showSafariAudioPermission, setShowSafariAudioPermission] =
     useState(false);
+  const [isListeningAfterSensitiveError, setIsListeningAfterSensitiveError] =
+    useState(false);
 
   const httpVoiceService = HttpVoiceService.getInstance();
   const vadRef = useRef<{ start: () => void; destroy: () => void } | null>(
@@ -284,16 +286,10 @@ export default function VADVoiceClient() {
 
   const vadError = state.context.error;
 
-  // HTTP timeout state
-  const [isRequestTimedOut, setIsRequestTimedOut] = useState(false);
+  // State timeout for preventing stuck states
   const [stateTimeout, setStateTimeout] = useState<number | null>(null);
 
   const getStatusText = (stateValue: string) => {
-    // Show timeout message if request timed out
-    if (isRequestTimedOut) {
-      return "Request timeout. Please retry";
-    }
-
     const statusMap: Record<string, string> = {
       idle: "Not Started",
       starting: "Starting...",
@@ -587,6 +583,8 @@ export default function VADVoiceClient() {
             }
 
             conversationActiveRef.current = true;
+            // Reset sensitive error flag when user starts speaking again
+            setIsListeningAfterSensitiveError(false);
             console.log("[VAD] Sending SPEECH_START event");
             if (sendRef.current) {
               sendRef.current({ type: "SPEECH_START" });
@@ -709,16 +707,45 @@ export default function VADVoiceClient() {
                     });
                   }
                 } else {
-                  console.error(
-                    "[VAD] HTTP voice processing failed:",
-                    response.error
-                  );
                   // Clear processing timeout since we received a response (even if failed)
                   clearTimeout(processingTimeout);
-                  debouncedSend({
-                    type: "ERROR",
-                    error: response.error || "Voice processing failed"
-                  });
+
+                  // Handle sensitive content error with user-friendly message
+                  let errorMessage =
+                    response.error || "Voice processing failed";
+
+                  // If it's a sensitive content error, transition to listening state
+                  if (errorMessage === "Unable to handle this query") {
+                    console.log(
+                      "[VAD] Sensitive content error detected, transitioning to listening state"
+                    );
+                    // Reset conversation state to allow new speech detection
+                    conversationActiveRef.current = false;
+                    isProcessingRef.current = false;
+
+                    // Set flag to show friendly error message in listening state
+                    setIsListeningAfterSensitiveError(true);
+
+                    // For sensitive content errors, show friendly message and transition to listening
+                    // This allows user to immediately try another question
+                    debouncedSend({
+                      type: "ERROR",
+                      error: "Unable to handle this query"
+                    });
+                    // Then transition to listening state
+                    debouncedSend({ type: "LISTEN" });
+                  } else {
+                    // Only log as error for non-sensitive content errors
+                    console.error(
+                      "[VAD] HTTP voice processing failed:",
+                      response.error
+                    );
+                    // Send ERROR event for non-sensitive content errors
+                    debouncedSend({
+                      type: "ERROR",
+                      error: errorMessage
+                    });
+                  }
                 }
               } catch (error) {
                 console.error("[VAD] HTTP request failed:", error);
@@ -950,6 +977,8 @@ export default function VADVoiceClient() {
                 audioViz.setIsPlaying(false);
                 audioViz.setIsInterruptible(false);
                 stopAudioBars();
+                // Clear sensitive error flag when audio playback completes successfully
+                setIsListeningAfterSensitiveError(false);
                 isProcessingRef.current = false;
                 conversationActiveRef.current = false;
 
@@ -1316,6 +1345,7 @@ export default function VADVoiceClient() {
               status={status}
               isProcessingState={isProcessingState}
               audioViz={audioViz}
+              isListeningAfterSensitiveError={isListeningAfterSensitiveError}
             />
 
             <PermissionsStatus
@@ -1335,6 +1365,7 @@ export default function VADVoiceClient() {
               permissions={permissions}
               startVoiceAssistant={startVoiceAssistant}
               stopVoiceAssistant={stopVoiceAssistant}
+              isListening={isListening}
             />
 
             {/* Enhanced Language Change Button with Dialect Info */}

@@ -5,11 +5,13 @@ import { AudioVisualizationState } from "../hooks/useAudioVisualization";
 export const StatusDisplay = ({
   status,
   isProcessingState,
-  audioViz
+  audioViz,
+  isListeningAfterSensitiveError
 }: {
   status: string;
   isProcessingState: boolean;
   audioViz: AudioVisualizationState;
+  isListeningAfterSensitiveError?: boolean;
 }) => {
   return (
     <div className="text-center mb-6">
@@ -24,13 +26,29 @@ export const StatusDisplay = ({
         {status === "Error" && "Error"}
       </div>
       <div className="text-xs text-cyan-300/80">
-        {status === "Not Started" && "Click Start to begin"}
-        {status === "Starting..." && "Requesting permissions and connecting..."}
-        {status === "System Ready" && "You may speak now"}
-        {status === "Listening..." && "I can hear you..."}
-        {status === "Processing..." && "thinking..."}
-        {status === "Responding..." && "speaking..."}
-        {status === "Interrupted" && "Conversation interrupted"}
+        {isListeningAfterSensitiveError &&
+          "Please try asking a different question"}
+        {!isListeningAfterSensitiveError &&
+          status === "Not Started" &&
+          "Click Start to begin"}
+        {!isListeningAfterSensitiveError &&
+          status === "Starting..." &&
+          "Requesting permissions and connecting..."}
+        {!isListeningAfterSensitiveError &&
+          status === "System Ready" &&
+          "You may speak now"}
+        {!isListeningAfterSensitiveError &&
+          status === "Listening..." &&
+          "I can hear you..."}
+        {!isListeningAfterSensitiveError &&
+          status === "Processing..." &&
+          "thinking..."}
+        {!isListeningAfterSensitiveError &&
+          status === "Responding..." &&
+          "speaking..."}
+        {!isListeningAfterSensitiveError &&
+          status === "Interrupted" &&
+          "Conversation interrupted"}
       </div>
 
       {audioViz.isInterruptible && (

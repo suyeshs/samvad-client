@@ -144,6 +144,20 @@ export const voiceAssistantMachine = createMachine({
               "[XState] RESPONSE_READY received, transitioning to responding"
             )
         },
+        READY: {
+          target: "ready",
+          actions: () =>
+            console.log(
+              "[XState] READY received in processing, transitioning to ready"
+            )
+        },
+        LISTEN: {
+          target: "listening",
+          actions: () =>
+            console.log(
+              "[XState] LISTEN received in processing, transitioning to listening"
+            )
+        },
         INTERRUPT: "interrupted",
         CLEAR_ERROR: { actions: assign({ error: null }) },
         ERROR: {
@@ -187,6 +201,7 @@ export const voiceAssistantMachine = createMachine({
       }),
       on: {
         RETRY: "listening",
+        READY: "ready",
         CANCEL: "idle",
         START: "starting",
         CLEAR_ERROR: { actions: assign({ error: null }) }

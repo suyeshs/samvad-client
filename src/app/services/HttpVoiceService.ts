@@ -51,8 +51,23 @@ export class HttpVoiceService {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
-      const result = await response.json();
+      const result = (await response.json()) as VoiceResponse;
       console.log("[HttpVoice] Received response:", result);
+
+      // Handle sensitive content errors with user-friendly message
+      if (
+        !result.success &&
+        result.error &&
+        result.error.includes("Response blocked: Sensitive content")
+      ) {
+        console.log(
+          "[HttpVoice] Sensitive content detected, providing user-friendly message"
+        );
+        return {
+          ...result,
+          error: "Unable to handle this query"
+        };
+      }
 
       return result;
     } catch (error) {

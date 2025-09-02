@@ -7,16 +7,18 @@ export const StartButton = ({
   status,
   permissions,
   startVoiceAssistant,
-  stopVoiceAssistant
+  stopVoiceAssistant,
+  isListening
 }: {
   isStarted: boolean;
   status: string;
   permissions: PermissionsState;
   startVoiceAssistant: () => void;
   stopVoiceAssistant: () => void;
+  isListening: boolean;
 }) => {
-  // Show stop button when listening
-  if (isStarted && status === "Listening...") {
+  // Show stop button when listening (check actual state, not status text)
+  if (isStarted && isListening) {
     return (
       <div className="text-center mb-4">
         <button
