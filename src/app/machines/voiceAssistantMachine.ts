@@ -1,18 +1,18 @@
 /**
  * Voice Assistant State Machine
- * 
+ *
  * XState machine that manages the conversation flow and state transitions
  * for the voice assistant. Handles all possible states from idle to error
  * recovery, ensuring smooth user experience during voice interactions.
- * 
+ *
  * @author Developer Team
  * @version 1.0.0
  */
-import { createMachine, assign } from 'xstate';
+import { createMachine, assign } from "xstate";
 
 /**
  * Context interface for the voice assistant state machine
- * 
+ *
  * Contains error state that can be set during any state transition
  * to handle and display error messages to the user.
  */
@@ -21,24 +21,24 @@ interface VoiceAssistantContext {
 }
 
 type VoiceAssistantEvent =
-  | { type: 'START' }
-  | { type: 'READY' }
-  | { type: 'LISTEN' }
-  | { type: 'SPEECH_START' }
-  | { type: 'SPEECH_END' }
-  | { type: 'RESPONSE_READY' }
-  | { type: 'END' }
-  | { type: 'REPEAT' }
-  | { type: 'INTERRUPT' }
-  | { type: 'RESUME' }
-  | { type: 'CANCEL' }
-  | { type: 'RETRY' }
-  | { type: 'CLEAR_ERROR' }
-  | { type: 'ERROR'; error: string };
+  | { type: "START" }
+  | { type: "READY" }
+  | { type: "LISTEN" }
+  | { type: "SPEECH_START" }
+  | { type: "SPEECH_END" }
+  | { type: "RESPONSE_READY" }
+  | { type: "END" }
+  | { type: "REPEAT" }
+  | { type: "INTERRUPT" }
+  | { type: "RESUME" }
+  | { type: "CANCEL" }
+  | { type: "RETRY" }
+  | { type: "CLEAR_ERROR" }
+  | { type: "ERROR"; error: string };
 
 /**
  * Voice Assistant State Machine Configuration
- * 
+ *
  * Defines the complete state machine with all possible states and transitions:
  * - idle: Initial state, waiting for user to start
  * - starting: Establishing connection and permissions
@@ -50,121 +50,147 @@ type VoiceAssistantEvent =
  * - error: Error state with recovery options
  */
 export const voiceAssistantMachine = createMachine({
-  id: 'voiceAssistant',
-  initial: 'idle',
+  id: "voiceAssistant",
+  initial: "idle",
   context: {
-    error: null,
+    error: null
   } as VoiceAssistantContext,
   states: {
     idle: {
-      entry: assign({ 
-        error: null,
+      entry: assign({
+        error: null
       }),
-      on: { 
-        START: 'starting',
-        RESPONSE_READY: 'responding',
+      on: {
+        START: "starting",
+        RESPONSE_READY: "responding",
         CLEAR_ERROR: { actions: assign({ error: null }) }
       }
     },
     starting: {
-      entry: assign({ 
-        error: null,
+      entry: assign({
+        error: null
       }),
       after: {
-        10000: { 
-          target: 'error',
-          actions: assign({ error: 'Failed to start: Connection timeout' })
+        10000: {
+          target: "error",
+          actions: assign({ error: "Failed to start: Connection timeout" })
         }
       },
       on: {
-        READY: 'ready',
-        ERROR: { target: 'error', actions: assign({ error: 'An error occurred' }) }
+        READY: "ready",
+        ERROR: {
+          target: "error",
+          actions: assign({ error: "An error occurred" })
+        }
       }
     },
     ready: {
-      entry: assign({ 
-        error: null,
+      entry: assign({
+        error: null
       }),
       on: {
-        LISTEN: 'listening',
-        SPEECH_START: 'listening', // Allow direct transition from ready to listening
-        RESPONSE_READY: 'responding',
+        LISTEN: "listening",
+        SPEECH_START: "listening", // Allow direct transition from ready to listening
+        RESPONSE_READY: "responding",
         CLEAR_ERROR: { actions: assign({ error: null }) },
-        ERROR: { target: 'error', actions: assign({ error: 'An error occurred' }) }
+        ERROR: {
+          target: "error",
+          actions: assign({ error: "An error occurred" })
+        }
       }
     },
     listening: {
       entry: [
-        assign({ 
-          error: null,
+        assign({
+          error: null
         }),
-        () => console.log('[XState] Entered listening state')
+        () => console.log("[XState] Entered listening state")
       ],
       on: {
         SPEECH_START: {
-          target: 'listening',
-          actions: () => console.log('[XState] SPEECH_START received in listening state')
+          target: "listening",
+          actions: () =>
+            console.log("[XState] SPEECH_START received in listening state")
         },
         SPEECH_END: {
-          target: 'processing',
-          actions: () => console.log('[XState] SPEECH_END received, transitioning to processing')
+          target: "processing",
+          actions: () =>
+            console.log(
+              "[XState] SPEECH_END received, transitioning to processing"
+            )
         },
-        RESPONSE_READY: 'responding',
-        INTERRUPT: 'interrupted',
+        RESPONSE_READY: "responding",
+        INTERRUPT: "interrupted",
+        CANCEL: "idle",
         CLEAR_ERROR: { actions: assign({ error: null }) },
-        ERROR: { target: 'error', actions: assign({ error: 'An error occurred' }) }
+        ERROR: {
+          target: "error",
+          actions: assign({ error: "An error occurred" })
+        }
       }
     },
     processing: {
       entry: [
-        assign({ 
-          error: null,
+        assign({
+          error: null
         }),
-        () => console.log('[XState] Entered processing state')
+        () => console.log("[XState] Entered processing state")
       ],
       on: {
         RESPONSE_READY: {
-          target: 'responding',
-          actions: () => console.log('[XState] RESPONSE_READY received, transitioning to responding')
+          target: "responding",
+          actions: () =>
+            console.log(
+              "[XState] RESPONSE_READY received, transitioning to responding"
+            )
         },
-        INTERRUPT: 'interrupted',
+        INTERRUPT: "interrupted",
         CLEAR_ERROR: { actions: assign({ error: null }) },
-        ERROR: { target: 'error', actions: assign({ error: 'An error occurred' }) }
+        ERROR: {
+          target: "error",
+          actions: assign({ error: "An error occurred" })
+        }
       }
     },
     responding: {
-      entry: assign({ 
-        error: null,
+      entry: assign({
+        error: null
       }),
       on: {
-        END: 'ready',
-        LISTEN: 'listening',
-        INTERRUPT: 'interrupted',
+        END: "ready",
+        LISTEN: "listening",
+        INTERRUPT: "interrupted",
         CLEAR_ERROR: { actions: assign({ error: null }) },
-        ERROR: { target: 'error', actions: assign({ error: 'An error occurred' }) }
+        ERROR: {
+          target: "error",
+          actions: assign({ error: "An error occurred" })
+        }
       }
     },
     interrupted: {
-      entry: assign({ 
-        error: null,
+      entry: assign({
+        error: null
       }),
       on: {
-        RESUME: 'listening',
-        CANCEL: 'idle',
+        RESUME: "listening",
+        CANCEL: "idle",
         CLEAR_ERROR: { actions: assign({ error: null }) },
-        ERROR: { target: 'error', actions: assign({ error: 'An error occurred' }) }
+        ERROR: {
+          target: "error",
+          actions: assign({ error: "An error occurred" })
+        }
       }
     },
     error: {
-      entry: assign({ 
-        error: null,
+      entry: assign({
+        error: null
       }),
       on: {
-        RETRY: 'listening',
-        CANCEL: 'idle',
-        START: 'starting',
+        RETRY: "listening",
+        CANCEL: "idle",
+        START: "starting",
         CLEAR_ERROR: { actions: assign({ error: null }) }
       }
     }
-  },
+  }
 });
