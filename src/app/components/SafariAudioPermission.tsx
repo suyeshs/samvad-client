@@ -1,15 +1,14 @@
-import React from 'react';
-import { observer } from 'mobx-react-lite';
-import { PermissionsStore } from '../stores';
+import React from "react";
+import { PermissionsState } from "../hooks/usePermissions";
 
 interface SafariAudioPermissionProps {
-  permissionsStore: PermissionsStore;
+  permissions: PermissionsState;
   onPermissionGranted: () => void;
 }
 
-export const SafariAudioPermission = observer(({ 
-  permissionsStore, 
-  onPermissionGranted 
+export const SafariAudioPermission = ({
+  permissions,
+  onPermissionGranted
 }: SafariAudioPermissionProps) => {
   const [isRequesting, setIsRequesting] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -17,23 +16,25 @@ export const SafariAudioPermission = observer(({
   const handleRequestPermission = async () => {
     setIsRequesting(true);
     setError(null);
-    
+
     try {
-      const granted = await permissionsStore.requestAudioPlaybackPermission();
+      const granted = await permissions.requestAudioPlaybackPermission();
       if (granted) {
         onPermissionGranted();
       } else {
-        setError('Audio playback permission was denied. Please allow audio in your browser settings.');
+        setError(
+          "Audio playback permission was denied. Please allow audio in your browser settings."
+        );
       }
     } catch (err) {
-      setError('Failed to request audio permission. Please try again.');
-      console.error('[SafariAudioPermission] Error:', err);
+      setError("Failed to request audio permission. Please try again.");
+      console.error("[SafariAudioPermission] Error:", err);
     } finally {
       setIsRequesting(false);
     }
   };
 
-  if (!permissionsStore.isSafari || permissionsStore.canPlayAudio) {
+  if (!permissions.isSafari || permissions.canPlayAudio) {
     return null;
   }
 
@@ -42,15 +43,26 @@ export const SafariAudioPermission = observer(({
       <div className="bg-white/10 backdrop-blur-xl rounded-2xl border border-cyan-500/30 p-6 max-w-md mx-4 text-center">
         <div className="mb-4">
           <div className="w-16 h-16 bg-gradient-to-r from-cyan-500 to-blue-500 rounded-full flex items-center justify-center mx-auto mb-4">
-            <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+            <svg
+              className="w-8 h-8 text-white"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"
+              />
             </svg>
           </div>
           <h3 className="text-xl font-bold text-white mb-2">
             Audio Permission Required
           </h3>
           <p className="text-cyan-200/80 text-sm leading-relaxed">
-            Safari requires explicit permission to play audio. Please click the button below to enable audio playback for the voice assistant.
+            Safari requires explicit permission to play audio. Please click the
+            button below to enable audio playback for the voice assistant.
           </p>
         </div>
 
@@ -72,10 +84,10 @@ export const SafariAudioPermission = observer(({
                 Enabling Audio...
               </div>
             ) : (
-              'Enable Audio Playback'
+              "Enable Audio Playback"
             )}
           </button>
-          
+
           <p className="text-cyan-300/60 text-xs">
             This is a one-time setup for Safari browsers
           </p>
@@ -83,4 +95,4 @@ export const SafariAudioPermission = observer(({
       </div>
     </div>
   );
-}); 
+};
