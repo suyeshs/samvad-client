@@ -16,19 +16,24 @@ export function useLocalStorage<T>(
     options || {};
 
   // Get from localStorage or use initial value
-  const [storedValue, setStoredValue] = useState<T>(() => {
-    if (typeof window === "undefined") {
-      return initialValue;
-    }
+  // Always start with initialValue to prevent hydration mismatch
+  const [storedValue, setStoredValue] = useState<T>(initialValue);
+  const [isHydrated, setIsHydrated] = useState(false);
+
+  // Load from localStorage after hydration
+  useEffect(() => {
+    if (typeof window === "undefined") return;
 
     try {
       const item = window.localStorage.getItem(key);
-      return item ? deserialize(item) : initialValue;
+      if (item) {
+        setStoredValue(deserialize(item));
+      }
     } catch (error) {
       console.warn(`Error reading localStorage key "${key}":`, error);
-      return initialValue;
     }
-  });
+    setIsHydrated(true);
+  }, [key, deserialize]);
 
   // Return a wrapped version of useState's setter function that persists the new value to localStorage
   const setValue = (value: T | ((val: T) => T)) => {
@@ -40,8 +45,8 @@ export function useLocalStorage<T>(
       // Save state
       setStoredValue(valueToStore);
 
-      // Save to localStorage
-      if (typeof window !== "undefined") {
+      // Save to localStorage only after hydration
+      if (typeof window !== "undefined" && isHydrated) {
         window.localStorage.setItem(key, serialize(valueToStore));
       }
     } catch (error) {
@@ -51,7 +56,7 @@ export function useLocalStorage<T>(
 
   // Listen for changes in other tabs/windows
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    if (typeof window === "undefined" || !isHydrated) return;
 
     const handleStorageChange = (e: StorageEvent) => {
       if (e.key === key && e.newValue !== null) {
@@ -68,7 +73,7 @@ export function useLocalStorage<T>(
 
     window.addEventListener("storage", handleStorageChange);
     return () => window.removeEventListener("storage", handleStorageChange);
-  }, [key, deserialize]);
+  }, [key, deserialize, isHydrated]);
 
   return [storedValue, setValue];
 }

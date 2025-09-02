@@ -25,6 +25,8 @@ import { voiceAssistantMachine } from "./machines/voiceAssistantMachine";
 import { usePermissions } from "./hooks/usePermissions";
 import { useLanguagePreferences } from "./hooks/useLanguagePreferences";
 import { useAudioVisualization } from "./hooks/useAudioVisualization";
+import { useLocalStorageBoolean } from "./hooks/useLocalStorage";
+
 import {
   LanguageConfig,
   getIndianLanguages
@@ -189,7 +191,11 @@ export default function VADVoiceClient() {
 
   const [isStarted, setIsStarted] = useState(false);
 
-  const [hasSelectedLanguage, setHasSelectedLanguage] = useState(false);
+  // Persist language selection preference across sessions
+  const [hasSelectedLanguage, setHasSelectedLanguage] = useLocalStorageBoolean(
+    "hasSelectedLanguage",
+    false
+  );
   const [showSafariAudioPermission, setShowSafariAudioPermission] =
     useState(false);
 
