@@ -79,6 +79,10 @@ export function usePermissions(): PermissionsState {
 
   // Check existing permissions
   const checkExistingPermissions = useCallback(async () => {
+    if (!mediaDevicesSupported) {
+      return;
+    }
+
     try {
       const audioPermissionResult = await navigator.permissions.query({
         name: "microphone" as PermissionName
@@ -95,7 +99,7 @@ export function usePermissions(): PermissionsState {
         error
       );
     }
-  }, []);
+  }, [mediaDevicesSupported]);
 
   // Check media devices support and existing permissions on mount
   useEffect(() => {
