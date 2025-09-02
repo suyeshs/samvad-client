@@ -79,10 +79,6 @@ export function usePermissions(): PermissionsState {
 
   // Check existing permissions
   const checkExistingPermissions = useCallback(async () => {
-    if (!mediaDevicesSupported) {
-      return;
-    }
-
     try {
       const audioPermissionResult = await navigator.permissions.query({
         name: "microphone" as PermissionName
@@ -99,7 +95,23 @@ export function usePermissions(): PermissionsState {
         error
       );
     }
-  }, [mediaDevicesSupported]);
+  }, []);
+
+  // Check media devices support and existing permissions on mount
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      // Check media devices support first
+      if (navigator.mediaDevices) {
+        setMediaDevicesSupported(true);
+        // Then check existing permissions
+        checkExistingPermissions();
+      } else {
+        setMediaDevicesSupported(false);
+        setAudioPermission("not-supported");
+        setVideoPermission("not-supported");
+      }
+    }
+  }, [checkExistingPermissions]);
 
   // Request microphone permission
   const requestAudioPermission = useCallback(async (): Promise<boolean> => {
